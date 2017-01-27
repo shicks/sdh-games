@@ -1,0 +1,92 @@
+// sio.go
+// Basic server IO framework for serving requests.
+
+package framework
+
+import (
+	"appengine"
+	"appengine/channel"
+	"appengine/datastore"
+	"encoding/json"
+  "io/ioutil"
+	"net/http"
+)
+
+type Request struct {
+	req *http.Request
+	resp http.ResponseWriter
+	ctx appengine.Context
+	done bool
+}
+
+func (r *Request) Ctx() appengine.Context {
+	if r.ctx == nil {
+		r.ctx = appengine.NewContext(r)
+	}
+	return r.ctx
+}
+
+func (r Request) Done() bool {
+	return r.done
+}
+
+func (r *Request) PostJson(req interface {}) {
+	if r.done {
+		return
+	}
+	body, err := ioutil.ReadAll(r.req.Body)
+	if err != nil {
+		r.Fail("Couldn't read body", http.StatusInternalServerError)
+		r.Ctx().Errorf("iotuil.ReadAll: %v", err)
+		return
+	}
+	err = json.Unmarshal(body, req)
+	if err != nil {
+		r.Fail("Couldn't unmarshal request", http.StatusBadRequest)
+		r.Ctx().Errorf("json.Unmarshal(%s): %v", body, err)
+	}
+}
+
+func (r *Request) Fail(message string, code int) {
+	if r.done {
+		r.Ctx().Errorf("Request failed a second time: %s (%d)", message, code)
+		return
+	}
+	http.Error(r.resp, message, code)
+	r.done = true
+}
+
+func (r *Request) RespondJson(data interface {}) {
+	if r.done {
+		r.Ctx().Errorf("Request already failed but tried to respond: %v", data)
+		return
+	}
+
+	b, err := json.Marshal(data)
+	if err != nil {
+		r.Fail("Couldn't marshal response", http.StatusInternalServerError)
+		r.Ctx().Errorf("json.Marshal: %v", err)
+		return
+	}
+
+	_, err = w.Write(b)
+	if err != nil {
+		r.Fail("Couldn't write response", http.StatusInternalServerError)
+		r.Ctx().Errorf("w.Write: %v", err)
+		return
+	}
+
+	r.done = true
+}
+
+// TODO(sdh): respond w/ html template?
+
+type Handler func(*Request)
+
+func (fn Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	req := &Request{r, w}
+	fn(req)
+	if !req.done {
+		req.Fail("Unknown error", http.StatusInternalServerError)
+	}
+}

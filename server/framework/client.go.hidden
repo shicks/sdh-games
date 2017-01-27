@@ -1,0 +1,63 @@
+// client.go
+// Represents a web client, with push communication.
+
+package framework
+
+import (
+	"appengine/channel"
+	"appengine/user"
+	// "server/framework/sio"
+)
+
+// structure -> how do we put clients in rooms?
+// to account for:
+//  - disconnection / reconnection?
+//  - use google login? or just ask for a name? - what about clashes?
+//  - same user multiple rooms?
+//  - same user multiple times in same room?!? - maybe not
+//    - or maybe (user, browser (in query)) -> room
+//    - then reload when not connected -> reconnect
+//    - reload if already connected -> new id
+
+// RPCs:
+//  - login? user=u1  ->  {token: t1, id: i1}  ->  URL: ?i1
+//  - join? room=r2   ->  {token: t2, id: i1}  ->  
+//  - send? text=tx1  ->  {OK}                 -> broadcast
+//  - shuffle? cards=...  -> {OK}              -> broadcast
+//  - reveal? cards=...   -> {id: ...}         -> broadcast
+//  - roll? dice=...  ->  {OK}                 -> broadcast
+
+// Ex:
+//  Tab1: login? user=u1  ->  {token: t1, id: i1}
+//        history.pushState(?id=i1)
+//  Tab2: login? user=u1  ->  {token: t2, id: i2}
+//  Tab1: disconnect
+//  Tab
+//  login? user=u1
+//  
+
+
+type RoomId string
+type ClientId string
+
+type Shuffle struct { // embedded in a Room (as ancestor)
+	Index uint32
+	Shuffle string `datastore:"noindex"` // comma-separated number
+}
+
+type Room struct {
+	Id string
+}
+
+type Client struct { // embedded in a Room (as ancestor)
+	Id string
+	User string // email?
+	Token string
+	// room? id?
+}
+
+
+// TODO(sdh): take a "room" request?
+// func New(r *sio.Request) Client {
+// 	tok, err := channel.Create(r.Ctx(), "")
+// }
